@@ -1,0 +1,206 @@
+#include <Adafruit_MPU6050.h>
+#include <U8g2lib.h>
+#include <Adafruit_Sensor.h>
+#include <Wire.h>
+
+Adafruit_MPU6050 mpu;
+U8G2_SSD1306_128X64_NONAME_F_HW_I2C u8g2(U8G2_R0, /* reset=*/ U8X8_PIN_NONE);
+
+bool readMPU = true; // Flag to control reading from MPU6050
+bool accidentDetected = false; // Flag to track accident detection
+unsigned long accidentTime;    // Time when accident is detected
+String phoneNumber = "+917439642762"; // Phone number to send SMS or make a call
+#define D5 5
+void setup()
+{
+  Serial.begin(115200);
+    Serial1.begin(115200);
+     pinMode(D5, OUTPUT); 
+  Serial.println("MPU6050 OLED demo");
+   Serial1.println("AT+GPS=1");
+   UpdateSerial();
+  if (!mpu.begin())
+  {
+    Serial.println("Sensor init failed");
+    while (1)
+      yield();
+  }
+  Serial.println("Found a MPU6050 sensor");
+
+  u8g2.begin();
+  u8g2.enableUTF8Print(); // Enable UTF-8 support for text
+  
+  delay(1000);
+}
+
+void recon() {
+  // Actions to be taken when the timer ends
+  u8g2.clearBuffer();
+  u8g2.setFont(u8g2_font_profont15_mr); // Choose font size
+  u8g2.setCursor(5, 30);
+  u8g2.println("Accident confirmed");
+  u8g2.sendBuffer();
+  getGPS();
+  delay(1000);
+ /* String gpsData = getGPS(); // Retrieve GPS data
+  delay(5000);
+  // Parse GPS data to extract latitude and longitude
+  int comma1 = gpsData.indexOf(',');
+  int comma2 = gpsData.indexOf(',', comma1 + 1);
+  String latitude = gpsData.substring(comma1 + 1, comma2);
+  int comma3 = gpsData.indexOf(',', comma2 + 1);
+  String longitude = gpsData.substring(comma2 + 1, comma3);
+//delay(5000);
+  // Send SMS with latitude and longitude
+  String message = "Accident confirmed\nLatitude: " + latitude + "\nLongitude: " + longitude;
+  //delay(10000);
+  Serial.println("Sending SMS...");
+  sendSMS(message, phoneNumber);
+delay(1000);
+  // Make call*/
+  Serial.println("Making a call...");
+  makeCall(phoneNumber);
+}
+
+void loop()
+{
+  if (readMPU) {
+    sensors_event_t a, g, temp;
+    mpu.getEvent(&a, &g, &temp);
+    
+    // Calculate magnitude of acceleration
+    float accelerationMagnitude = sqrt(pow(a.acceleration.x, 2) + pow(a.acceleration.y, 2) + pow(a.acceleration.z, 2));
+
+    Serial.print("Acceleration Magnitude: ");
+    Serial.print(accelerationMagnitude, 1);
+    Serial.println(" m/s^2");
+     // Serial.println("AT+LOCATION=2"); 
+
+
+    u8g2.clearBuffer();
+    u8g2.setFont(u8g2_font_profont15_mr); // Choose font size
+    u8g2.setCursor(5, 15);
+    u8g2.println("Magnitude");
+    u8g2.println(accelerationMagnitude, 1);
+
+    // Check for accident detection
+    if (accelerationMagnitude < 7 || accelerationMagnitude > 14)
+    { 
+      digitalWrite(D5,HIGH);
+      accidentDetected = true;
+      accidentTime = millis(); // Note the time of accident
+      readMPU = false; // Stop reading from MPU6050
+    }
+  }
+
+  // Display timer if accident detected
+  if (accidentDetected)
+  {
+    unsigned long elapsedTime = millis() - accidentTime;
+    unsigned long remainingTime = 30 * 1000 - elapsedTime; // 30 seconds countdown
+
+    if (remainingTime <= 0)
+    {
+      // Time's up, reset everything
+      accidentDetected = false;
+      // Call recon function when the timer ends
+      recon();
+    }
+    else if (remainingTime < 1000)
+    {
+      // If less than 1 second remaining, stop reading data and confirm the accident
+      accidentDetected = false;
+      // Call recon function when the timer ends
+      recon();
+    }
+    else
+    {
+      // Display the timer
+      u8g2.setFont(u8g2_font_profont15_mr); // Choose font size
+      u8g2.setCursor(5, 45);
+      u8g2.print("Timer: ");
+      u8g2.print(remainingTime / 1000);
+      u8g2.print(" sec");
+    }
+  }
+
+  u8g2.sendBuffer();
+  delay(100);
+}
+
+void UpdateSerial() {
+  while (Serial1.available())  Serial.write(Serial1.read());
+  while (Serial.available())   Serial1.write(Serial.read());
+}
+// Function to send SMS
+void sendSMS(String message, String phoneNumber) {
+  Serial1.println("AT+CMGF=1"); // Set SMS mode to text
+  delay(1000);
+  while (Serial1.available()) {
+    Serial.write(Serial1.read());
+  }
+
+  Serial1.print("AT+CMGS=\""); // Start SMS sending command
+  Serial1.print(phoneNumber);
+  Serial1.println("\"");
+  delay(1000);
+  while (Serial1.available()) {
+    Serial.write(Serial1.read());
+  }
+
+  Serial1.print(message); // Send the message
+  delay(100);
+  Serial1.write(0x1A); // Send Ctrl+Z to indicate end of message
+  delay(1000);
+  while (Serial1.available()) {
+    Serial.write(Serial1.read());
+  }
+
+  Serial1.println();
+}
+
+// Function to make a call
+void makeCall(String phoneNumber) {
+  Serial1.begin(115200);
+  Serial1.print("ATD"); // Command to make a call
+  Serial1.print(phoneNumber);
+  Serial1.println(";");
+
+  delay(10000); // Delay for call initiation
+
+  // End the call
+  Serial1.println("ATH");
+
+  // Wait for a moment before ending the call
+  delay(1000);
+}
+
+void getGPS() {
+  Serial1.println("AT+LOCATION=2"); // Read GPS data
+  delay(1000);
+
+  String gpsData = "";
+
+  // Read and collect GPS data
+  while (Serial1.available()) {
+    char c = Serial1.read();
+    gpsData += c;
+  }
+
+  Serial.println("GPS Data: " + gpsData);
+
+  // Extract latitude and longitude from GPS data
+  int commaIndex1 = gpsData.indexOf(',');
+  int commaIndex2 = gpsData.indexOf(',', commaIndex1 + 1);
+  int commaIndex3 = gpsData.indexOf(',', commaIndex2 + 1);
+
+  String latitude = gpsData.substring(commaIndex1 + 1, commaIndex2);
+  String longitude = gpsData.substring(commaIndex2 + 1, commaIndex3);
+
+  Serial.println("Latitude: " + latitude);
+  Serial.println("Longitude: " + longitude);
+
+  // Send SMS with latitude and longitude
+String message = "Latitude: " + latitude + ", Longitude: " + longitude + "  https://www.google.com/maps?q=" + latitude + "," + longitude;
+   sendSMS(message, phoneNumber);
+}
