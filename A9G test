@@ -1,0 +1,79 @@
+String Phone = "+91xxxxxxxxxx";
+
+void setup() {
+  Serial.begin(115200);
+  Serial.println("Goodnight moon!");
+  Serial1.begin(115200);
+  delay(5000);
+  Serial1.println("AT");
+  delay(500);
+  UpdateSerial();
+  Serial1.println("AT+CPMS=\"SM\",\"SM\",\"SM\"");  // Store SMS in Simcard
+  delay(500);
+  UpdateSerial();
+  Serial1.println("AT+CMGD=4,4");     // Delete all sms
+  delay(500);
+  UpdateSerial();
+  Serial1.println("AT+CPMS?");        // Check sms store location
+  delay(500);
+  UpdateSerial();
+  Serial1.println("AT+CMGF=1");       // Text mode
+  delay(500);
+  UpdateSerial();
+  Serial1.print("AT+CSMP=17,167,0,0\r"); // Configuring TEXT mode
+  delay(500);
+  Serial1.println("AT+CSQ");          // Check Network signal level (0-31)
+  delay(500);
+  UpdateSerial();
+  Reply("Hi Test Message From Ai Thinker A9 Module", Phone);
+  
+  // Call function
+  makeCall(Phone);
+  Serial1.println("AT+GPS=1");          // Check Network signal level (0-31)
+  delay(500);
+  UpdateSerial();
+}
+
+void loop() {
+  while (Serial1.available()) {
+    parseData(Serial1.readString());
+  }
+  while (Serial.available()) {
+    Serial1.write(Serial.read());
+  }
+}
+
+void parseData(String buff) {
+  Serial.println(buff);
+}
+
+void UpdateSerial() {
+  while (Serial1.available())  Serial.write(Serial1.read());
+  while (Serial.available())   Serial1.write(Serial.read());
+}
+
+void Reply(String text, String Phone) {
+  Serial1.print("AT+CMGF=1\r");
+  delay(1000);
+  Serial1.print("AT+CSMP=17,167,0,0\r"); // Configuring TEXT mode
+  delay(1000);
+  Serial1.print("AT+CMGS=\"" + Phone + "\"\r");
+  delay(1000);
+  Serial1.print(text);
+  delay(100);
+  Serial1.write(0x1A); // ascii code for ctrl-26
+  delay(1000);
+  Serial.println("SMS Sent Successfully.");
+  UpdateSerial();
+  delay(2000);
+  Serial1.println("AT+CMGD=4,4");
+  delay(1000);
+  UpdateSerial();
+}
+
+void makeCall(String Phone) {
+  Serial1.print("ATD" + Phone + ";\r"); // ATD to dial, semicolon to end the command
+  delay(1000); // Delay for the call to be initiated
+  
+  UpdateSerial();
+}
