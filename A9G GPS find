@@ -1,0 +1,32 @@
+#include <Arduino.h>
+
+String Phone = "+91**********";
+
+void setup() {
+  Serial.begin(115200);
+  Serial1.begin(115200); // Start communication with the GPS module
+  delay(5000); // Delay for module initialization
+  Serial.println("Goodnight moon!");
+  
+  // Enable GPS
+  Serial1.println("AT+GPS=1"); // Enable GPS
+  delay(1000);
+  while(Serial1.available() > 0) {
+    char response = Serial1.read();
+    Serial.print(response);
+  }
+}
+
+void loop() {
+  getGPS(); // Continuously get GPS data
+  delay(1000); // Adjust the delay according to your requirements
+}
+
+void getGPS() {
+  Serial1.println("AT+LOCATION=2"); // Request GPS data
+  delay(1000);
+  while(Serial1.available() > 0) {
+    char response = Serial1.read();
+    Serial.print(response);
+  }
+}
